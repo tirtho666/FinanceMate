@@ -1,17 +1,27 @@
-# financemate
+# FinanceMate 💰
 
-A new Flutter project.
+A robust, full-stack personal finance and expense tracking application designed to help users manage their daily transactions with precision and security. Built with a scalable architecture, FinanceMate ensures seamless data synchronization and a smooth user experience.
 
-## Getting Started
+## 🚀 Tech Stack
 
-This project is a starting point for a Flutter application.
+* **Frontend:** Flutter & Dart
+* **Backend:** Node.js, Express.js
+* **Database:** PostgreSQL (Hosted on Neon)
+* **Hosting:** Render (Web Service)
+* **State Management:** Provider
+* **Version Control:** Git & GitHub
 
-A few resources to get you started if this is your first Flutter project:
+## 🏗️ Architecture
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+This project strictly follows **Clean Architecture** principles to separate concerns and maintain a highly scalable codebase:
+* **Presentation Layer:** UI, Widgets, and State Management.
+* **Domain Layer:** Business logic, Entities, and Core Use Cases.
+* **Data Layer:** Repositories, Data Sources (Local & Remote API), and DTOs.
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## ✨ Key Features
+
+* **JWT Authentication:** Secure user sessions and API endpoint protection.
+* **Local App Lock:** SHA-256 hashing via `flutter_secure_storage` for maximum device-level security.
+* **Offline-First Synchronization:** Seamless offline data caching with automatic cloud database synchronization.
+* **Comprehensive Expense Tracking:** Custom category filtering, multi-currency selection, and detailed transaction logging.
+* **REST API Integration:** Non-blocking asynchronous execution ensuring fast communication between the Flutter app and Node.js server.
