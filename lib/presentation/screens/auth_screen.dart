@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/navigation/app_routes.dart';
 import '../../core/theme/app_colors.dart';
+import '../providers/app_lock_provider.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/auth_logo.dart';
 import '../widgets/login_form.dart';
@@ -19,6 +20,11 @@ class _AuthScreenState extends State<AuthScreen> {
   final _scrollController = ScrollController();
   final _loginKey = GlobalKey();
   final _signUpKey = GlobalKey();
+  // Each form owns its validation through its own [FormState], so submitting
+  // one never validates the other. The screen keeps the keys so that switching
+  // forms can clear the form the user is leaving.
+  final _loginFormKey = GlobalKey<FormState>();
+  final _signUpFormKey = GlobalKey<FormState>();
 
   @override
   void initState() {
@@ -28,13 +34,26 @@ class _AuthScreenState extends State<AuthScreen> {
 
   void _redirectIfSignedIn() {
     if (!mounted) return;
-    if (context.read<AuthProvider>().isAuthenticated) {
-      // Ekhane aage AppRoutes.main chilo, seta change kore AppRoutes.lock kora holo
-      Navigator.of(context).pushNamedAndRemoveUntil(
-        AppRoutes.lock,
-        (route) => false,
-      );
-    }
+    if (!context.read<AuthProvider>().isAuthenticated) return;
+    // Ekhane aage AppRoutes.main chilo, seta change kore App Lock thakle
+    // AppRoutes.lock kora holo.
+    final appLock = context.read<AppLockProvider>();
+    Navigator.of(context).pushNamedAndRemoveUntil(
+      appLock.isEnabled ? AppRoutes.lock : AppRoutes.main,
+      (route) => false,
+    );
+  }
+
+  /// Clears the form being left before scrolling to the other one, so the
+  /// inactive form never keeps stale validation errors on screen.
+  void _switchToSignUp() {
+    _loginFormKey.currentState?.reset();
+    _scrollTo(_signUpKey);
+  }
+
+  void _switchToLogin() {
+    _signUpFormKey.currentState?.reset();
+    _scrollTo(_loginKey);
   }
 
   Future<void> _scrollTo(GlobalKey key) async {
@@ -82,14 +101,16 @@ class _AuthScreenState extends State<AuthScreen> {
                         KeyedSubtree(
                           key: _loginKey,
                           child: LoginForm(
-                            onSwitchToSignUp: () => _scrollTo(_signUpKey),
+                            formKey: _loginFormKey,
+                            onSwitchToSignUp: _switchToSignUp,
                           ),
                         ),
                         const SizedBox(height: 32),
                         KeyedSubtree(
                           key: _signUpKey,
                           child: SignUpForm(
-                            onSwitchToLogin: () => _scrollTo(_loginKey),
+                            formKey: _signUpFormKey,
+                            onSwitchToLogin: _switchToLogin,
                           ),
                         ),
                         const SizedBox(height: 24),

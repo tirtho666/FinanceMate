@@ -1,142 +1,208 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-
+import '../../../core/network/api_client.dart';
+import '../../../core/network/api_exception.dart';
 import '../../../domain/entities/finance_transaction.dart';
 import '../../../domain/failures/data_failure.dart';
 import '../../models/transaction_model.dart';
-import 'firestore_paths.dart';
+import '../../models/transaction_summary_model.dart';
 
+/// Transaction data source backed by the FinanceMate Node.js + PostgreSQL API.
+///
+/// [ApiClient] attaches the persisted `Authorization: Bearer <token>` header, so
+/// every endpoint resolves to the signed-in user without the caller passing an
+/// id. Network, DNS and timeout failures surface as a [DataFailure] with a
+/// `null` status code, which is how the repository detects that a write has to
+/// be queued offline.
 class TransactionRemoteSource {
-  TransactionRemoteSource({
-    required FirebaseFirestore firestore,
-    required this.auth,
-  })  : _transactions = firestore.collection(FirestorePaths.transactions),
-        _users = firestore.collection(FirestorePaths.users),
-        _firestore = firestore;
+  TransactionRemoteSource(this._api);
 
-  final CollectionReference<Map<String, dynamic>> _transactions;
-  final CollectionReference<Map<String, dynamic>> _users;
-  final FirebaseFirestore _firestore;
-  final FirebaseAuth auth;
+  static const String _transactionsPath = '/api/transactions';
+  static const String _summaryPath = '/api/transactions/summary';
 
-  Stream<List<TransactionModel>> watchCurrentUserTransactions() {
-    final uid = auth.currentUser?.uid;
-    if (uid == null || uid.isEmpty) {
-      return Stream<List<TransactionModel>>.value(const []);
+  final ApiClient _api;
+
+  /// `GET /api/transactions`, optionally narrowed by the UI filters.
+  Future<List<TransactionModel>> fetchTransactions({
+    DateTime? from,
+    DateTime? to,
+    String? category,
+  }) async {
+    try {
+      final response = await _api.get(
+        _transactionsPath,
+        query: <String, dynamic>{
+          'from': ?_isoDay(from),
+          'to': ?_isoDay(to),
+          'category': ?_trimmed(category),
+        },
+      );
+      return _extractTransactions(response);
+    } on ApiException catch (error) {
+      throw DataFailure(error.message, statusCode: error.statusCode);
     }
-    return _transactions.where('userId', isEqualTo: uid).snapshots().map((
-      snapshot,
-    ) {
-      final items = snapshot.docs
-          .map(TransactionModel.fromFirestore)
-          .toList();
-      items.sort((a, b) => b.date.compareTo(a.date));
-      return List<TransactionModel>.unmodifiable(items);
-    });
   }
 
-  Future<TransactionModel> addTransaction({
+  /// `GET /api/transactions/summary`.
+  Future<TransactionSummaryModel> fetchSummary() async {
+    try {
+      final response = await _api.get(_summaryPath);
+      return TransactionSummaryModel.fromJson(
+        _unwrapMap(response, const [
+          'summary',
+          'data',
+          'result',
+          'overview',
+          'totals',
+        ]),
+      );
+    } on ApiException catch (error) {
+      throw DataFailure(error.message, statusCode: error.statusCode);
+    }
+  }
+
+  /// `POST /api/transactions`.
+  Future<TransactionModel> createTransaction({
     required TransactionType type,
     required double amount,
     required String category,
     required DateTime date,
     String? note,
   }) async {
-    final uid = _requireUid();
-    final docRef = _transactions.doc();
-    final model = TransactionModel(
-      id: docRef.id,
-      userId: uid,
-      type: type.name,
+    final payload = _body(
+      type: type,
       amount: amount,
       category: category,
       date: date,
       note: note,
     );
-    await docRef.set(model.toFirestore());
-    return model;
+    try {
+      final response = await _api.post(_transactionsPath, body: payload);
+      return _parseTransaction(response, payload);
+    } on ApiException catch (error) {
+      throw DataFailure(error.message, statusCode: error.statusCode);
+    }
   }
 
-  Future<TransactionModel> addTransactionWithUserUpdate({
+  /// `PUT /api/transactions/:id`.
+  Future<TransactionModel> updateTransaction({
+    required String id,
     required TransactionType type,
     required double amount,
     required String category,
     required DateTime date,
     String? note,
   }) async {
-    final uid = _requireUid();
-    final transactionDocRef = _transactions.doc();
-    final userDocRef = _users.doc(uid);
-
-    final model = TransactionModel(
-      id: transactionDocRef.id,
-      userId: uid,
-      type: type.name,
+    final payload = _body(
+      type: type,
       amount: amount,
       category: category,
       date: date,
       note: note,
     );
-
-    final batch = _firestore.batch();
-    batch.set(transactionDocRef, model.toFirestore());
-
-    final isIncome = type == TransactionType.income;
-    final balanceDelta = isIncome ? amount : -amount;
-    final incomeDelta = isIncome ? amount : 0.0;
-    final expenseDelta = isIncome ? 0.0 : amount;
-
-    batch.set(
-      userDocRef,
-      <String, Object?>{
-        'uid': uid,
-        'balance': FieldValue.increment(balanceDelta),
-        'totalIncome': FieldValue.increment(incomeDelta),
-        'totalExpense': FieldValue.increment(expenseDelta),
-        'currency': 'BDT',
-      },
-      SetOptions(merge: true),
-    );
-
-    await batch.commit();
-    return model;
-  }
-
-  // নতুন মেথড: ট্রানজেকশন ডিলিট এবং ব্যালেন্স অ্যাডজাস্ট করার জন্য
-  Future<void> deleteTransactionWithUserUpdate(FinanceTransaction transaction) async {
-    final uid = _requireUid();
-    final transactionDocRef = _transactions.doc(transaction.id);
-    final userDocRef = _users.doc(uid);
-
-    final batch = _firestore.batch();
-    batch.delete(transactionDocRef);
-
-    final isIncome = transaction.type == TransactionType.income;
-    
-    // অ্যাড করার ঠিক উল্টো লজিক, যাতে ডিলিট করলে ব্যালেন্স ঠিক থাকে
-    final balanceDelta = isIncome ? -transaction.amount : transaction.amount;
-    final incomeDelta = isIncome ? -transaction.amount : 0.0;
-    final expenseDelta = isIncome ? 0.0 : -transaction.amount;
-
-    batch.set(
-      userDocRef,
-      <String, Object?>{
-        'uid': uid,
-        'balance': FieldValue.increment(balanceDelta),
-        'totalIncome': FieldValue.increment(incomeDelta),
-        'totalExpense': FieldValue.increment(expenseDelta),
-      },
-      SetOptions(merge: true),
-    );
-
-    await batch.commit();
-  }
-
-  String _requireUid() {
-    final uid = auth.currentUser?.uid;
-    if (uid == null || uid.isEmpty) {
-      throw const DataFailure('You must be signed in.');
+    try {
+      final response = await _api.put('$_transactionsPath/$id', body: payload);
+      return _parseTransaction(response, payload, fallbackId: id);
+    } on ApiException catch (error) {
+      throw DataFailure(error.message, statusCode: error.statusCode);
     }
-    return uid;
+  }
+
+  /// `DELETE /api/transactions/:id`.
+  Future<void> deleteTransaction(String id) async {
+    try {
+      await _api.delete('$_transactionsPath/$id');
+    } on ApiException catch (error) {
+      throw DataFailure(error.message, statusCode: error.statusCode);
+    }
+  }
+
+  Map<String, dynamic> _body({
+    required TransactionType type,
+    required double amount,
+    required String category,
+    required DateTime date,
+    String? note,
+  }) {
+    return <String, dynamic>{
+      'type': type.name,
+      'amount': amount,
+      'category': category,
+      'date': date.toUtc().toIso8601String(),
+      'note': note,
+    };
+  }
+
+  /// The response body wins wherever it carries a field; otherwise the values
+  /// the request sent are used, so a terse `{id: 7}` reply still yields a full
+  /// model that can be cached locally.
+  TransactionModel _parseTransaction(
+    Map<String, dynamic> response,
+    Map<String, dynamic> payload, {
+    String? fallbackId,
+  }) {
+    final json = _unwrapMap(response, const [
+      'transaction',
+      'data',
+      'result',
+      'item',
+    ]);
+    final merged = <String, dynamic>{
+      'id': ?fallbackId,
+      ...payload,
+      ...json,
+    };
+    return TransactionModel.fromJson(merged);
+  }
+
+  List<TransactionModel> _extractTransactions(Map<String, dynamic> response) {
+    final items = <TransactionModel>[];
+    for (final entry in _extractList(response)) {
+      if (entry is Map) {
+        items.add(TransactionModel.fromJson(Map<String, dynamic>.from(entry)));
+      }
+    }
+    return List<TransactionModel>.unmodifiable(items);
+  }
+
+  List<Object?> _extractList(Map<String, dynamic> response) {
+    const containerKeys = [
+      'transactions',
+      'items',
+      'results',
+      'list',
+      'rows',
+      'data',
+    ];
+    for (final key in containerKeys) {
+      final value = response[key];
+      if (value is List) return value;
+      if (value is Map) {
+        for (final inner in containerKeys) {
+          final nested = value[inner];
+          if (nested is List) return nested;
+        }
+      }
+    }
+    return const [];
+  }
+
+  Map<String, dynamic> _unwrapMap(
+    Map<String, dynamic> response,
+    List<String> keys,
+  ) {
+    for (final key in keys) {
+      final nested = response[key];
+      if (nested is Map) return Map<String, dynamic>.from(nested);
+    }
+    return response;
+  }
+
+  String? _trimmed(String? value) {
+    final trimmed = value?.trim();
+    return (trimmed == null || trimmed.isEmpty) ? null : trimmed;
+  }
+
+  String? _isoDay(DateTime? value) {
+    if (value == null) return null;
+    return DateTime(value.year, value.month, value.day).toIso8601String();
   }
 }

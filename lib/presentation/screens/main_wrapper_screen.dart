@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../domain/repositories/transaction_repository.dart';
 import '../widgets/main_bottom_bar.dart';
 import 'add_transaction_screen.dart';
 import 'all_transactions_screen.dart';
@@ -14,9 +18,31 @@ class MainWrapperScreen extends StatefulWidget {
   State<MainWrapperScreen> createState() => _MainWrapperScreenState();
 }
 
-class _MainWrapperScreenState extends State<MainWrapperScreen> {
+class _MainWrapperScreenState extends State<MainWrapperScreen>
+    with WidgetsBindingObserver {
   MainTab _currentTab = MainTab.home;
   MainTab _lastContentTab = MainTab.home;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Coming back to the app is the natural moment to replay anything that was
+    // queued while offline and refresh the cached list/summary.
+    if (state == AppLifecycleState.resumed) {
+      unawaited(context.read<TransactionRepository>().refresh());
+    }
+  }
 
   void _onTabSelected(MainTab tab) {
     setState(() {

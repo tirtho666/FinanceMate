@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/navigation/app_routes.dart';
 import '../../core/theme/app_palette.dart';
-import '../providers/auth_provider.dart';
+import '../providers/app_lock_provider.dart';
 
 class LockScreen extends StatefulWidget {
   const LockScreen({super.key});
@@ -20,13 +20,25 @@ class _LockScreenState extends State<LockScreen> {
     final password = _passwordController.text.trim();
     if (password.isEmpty) return;
 
-    final authProvider = context.read<AuthProvider>();
-    final success = await authProvider.verifyLockPassword(context, password);
-    
-    // পাসওয়ার্ড সঠিক হলে সরাসরি হোম/মেইন পেজে চলে যাবে
-    if (success && mounted) {
-      Navigator.of(context).pushReplacementNamed(AppRoutes.main);
+    final appLock = context.read<AppLockProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+    final success = await appLock.unlock(password);
+
+    if (!mounted) return;
+    if (!success) {
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(appLock.errorMessage ?? 'Incorrect password. Please try again.'),
+            backgroundColor: AppPalette.expense,
+          ),
+        );
+      return;
     }
+
+    // পাসওয়ার্ড সঠিক হলে সরাসরি হোম/মেইন পেজে চলে যাবে
+    Navigator.of(context).pushReplacementNamed(AppRoutes.main);
   }
 
   @override
@@ -37,7 +49,7 @@ class _LockScreenState extends State<LockScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final authProvider = context.watch<AuthProvider>();
+    final appLockProvider = context.watch<AppLockProvider>();
     
     return Scaffold(
       backgroundColor: Colors.white,
@@ -93,7 +105,7 @@ class _LockScreenState extends State<LockScreen> {
               ),
               const SizedBox(height: 24),
               ElevatedButton(
-                onPressed: authProvider.isLoading ? null : _unlockApp,
+                onPressed: appLockProvider.isLoading ? null : _unlockApp,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppPalette.primary,
                   foregroundColor: Colors.white,
@@ -102,7 +114,7 @@ class _LockScreenState extends State<LockScreen> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: authProvider.isLoading
+                child: appLockProvider.isLoading
                     ? const SizedBox(
                         height: 20,
                         width: 20,

@@ -1,7 +1,7 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 import '../../domain/entities/finance_transaction.dart';
 
+/// Data-layer representation of a transaction, mapped to/from the REST API
+/// payloads and the local SQLite cache rows.
 class TransactionModel {
   const TransactionModel({
     required this.id,
@@ -21,18 +21,41 @@ class TransactionModel {
   final DateTime date;
   final String? note;
 
-  factory TransactionModel.fromFirestore(
-    DocumentSnapshot<Map<String, dynamic>> doc,
-  ) {
-    final data = doc.data() ?? const <String, dynamic>{};
+  /// Maps a transaction payload from the REST API, tolerating the usual field
+  /// aliases (`id`/`_id`/`transactionId`, `type`/`transactionType`, …).
+  factory TransactionModel.fromJson(Map<String, dynamic> json) {
     return TransactionModel(
-      id: data['id'] as String? ?? doc.id,
-      userId: data['userId'] as String? ?? '',
-      type: data['type'] as String? ?? TransactionType.expense.name,
-      amount: _toDouble(data['amount']),
-      category: data['category'] as String? ?? '',
-      date: _toDate(data['date']),
-      note: data['note'] as String?,
+      id: _firstString(json, const [
+            'id',
+            '_id',
+            'transactionId',
+            'transaction_id',
+          ]) ??
+          '',
+      userId: _firstString(json, const ['userId', 'user_id', 'uid']) ?? '',
+      type: _type(json),
+      amount: _toDouble(json['amount'] ?? json['value']),
+      category: _firstString(json, const [
+            'category',
+            'categoryName',
+            'category_name',
+          ]) ??
+          '',
+      date: _toDate(json['date'] ?? json['createdAt'] ?? json['created_at']),
+      note: _firstString(json, const ['note', 'description', 'details']),
+    );
+  }
+
+  /// Restores a row from the local SQLite cache.
+  factory TransactionModel.fromMap(Map<String, Object?> map) {
+    return TransactionModel(
+      id: (map['id'] as String?) ?? '',
+      userId: (map['user_id'] as String?) ?? '',
+      type: (map['type'] as String?) ?? TransactionType.expense.name,
+      amount: _toDouble(map['amount']),
+      category: (map['category'] as String?) ?? '',
+      date: DateTime.fromMillisecondsSinceEpoch((map['date'] as int?) ?? 0),
+      note: map['note'] as String?,
     );
   }
 
@@ -48,16 +71,31 @@ class TransactionModel {
     );
   }
 
-  Map<String, dynamic> toFirestore() {
-    return {
+  /// Serialises to a row for the local SQLite cache. [pendingSync] marks rows
+  /// that were created offline and still have to be pushed to the backend.
+  Map<String, Object?> toMap({required bool pendingSync}) {
+    return <String, Object?>{
       'id': id,
-      'userId': userId,
+      'user_id': userId,
       'type': type,
       'amount': amount,
       'category': category,
-      'date': Timestamp.fromDate(date.toUtc()),
+      'date': date.millisecondsSinceEpoch,
       'note': note,
+      'pending_sync': pendingSync ? 1 : 0,
     };
+  }
+
+  TransactionModel copyWith({String? id, String? userId}) {
+    return TransactionModel(
+      id: id ?? this.id,
+      userId: userId ?? this.userId,
+      type: type,
+      amount: amount,
+      category: category,
+      date: date,
+      note: note,
+    );
   }
 
   FinanceTransaction toEntity() {
@@ -74,14 +112,46 @@ class TransactionModel {
     );
   }
 
+  static String _type(Map<String, dynamic> json) {
+    final raw = _firstString(json, const [
+          'type',
+          'transactionType',
+          'transaction_type',
+        ]) ??
+        TransactionType.expense.name;
+    final normalized = raw.toLowerCase();
+    if (normalized.contains('income') || normalized == 'credit') {
+      return TransactionType.income.name;
+    }
+    return TransactionType.expense.name;
+  }
+
   static double _toDouble(Object? value) {
     if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? 0;
     return 0;
   }
 
   static DateTime _toDate(Object? value) {
-    if (value is Timestamp) return value.toDate();
     if (value is DateTime) return value;
+    if (value is num) {
+      return DateTime.fromMillisecondsSinceEpoch(value.toInt());
+    }
+    if (value is String) {
+      final parsed = DateTime.tryParse(value);
+      if (parsed != null) return parsed.toLocal();
+      final millis = int.tryParse(value);
+      if (millis != null) return DateTime.fromMillisecondsSinceEpoch(millis);
+    }
     return DateTime.fromMillisecondsSinceEpoch(0);
+  }
+
+  static String? _firstString(Map<String, dynamic> json, List<String> keys) {
+    for (final key in keys) {
+      final value = json[key];
+      if (value is String && value.trim().isNotEmpty) return value.trim();
+      if (value is num) return '$value';
+    }
+    return null;
   }
 }

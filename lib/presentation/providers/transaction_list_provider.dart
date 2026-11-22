@@ -4,12 +4,9 @@ import 'package:flutter/foundation.dart';
 
 import '../../domain/entities/finance_transaction.dart';
 import '../../domain/entities/user_profile.dart';
+import '../../domain/failures/data_failure.dart';
 import '../../domain/repositories/transaction_repository.dart';
 import '../../domain/repositories/user_repository.dart';
-// Data layer থেকে Remote Source ইমপোর্ট করা হলো Delete মেথডের জন্য
-import '../../data/sources/remote/transaction_remote_source.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
 enum TransactionTimeFilter { thisMonth, lastMonth, all }
 
@@ -58,9 +55,11 @@ class TransactionListProvider extends ChangeNotifier {
   bool get hasCategoryFilter =>
       _categoryFilter != null && _categoryFilter!.trim().isNotEmpty;
 
+  /// Local filtering keeps the list instant and usable offline; the same
+  /// filters are also sent to the backend (see [_refreshWithFilters]) so the
+  /// cached window stays in sync with what the UI is showing.
   List<FinanceTransaction> get filteredTransactions {
-    final now = DateTime.now();
-    final range = _timeFilterToRange(_timeFilter, now);
+    final range = _timeFilterToRange(_timeFilter, DateTime.now());
     final category = _categoryFilter?.trim().toLowerCase();
     final matchesCategory = category == null || category.isEmpty;
 
@@ -131,6 +130,7 @@ class TransactionListProvider extends ChangeNotifier {
     if (_timeFilter == filter) return;
     _timeFilter = filter;
     notifyListeners();
+    _refreshWithFilters();
   }
 
   void setCategoryFilter(String? category) {
@@ -139,6 +139,7 @@ class TransactionListProvider extends ChangeNotifier {
     if (_categoryFilter == newVal) return;
     _categoryFilter = newVal;
     notifyListeners();
+    _refreshWithFilters();
   }
 
   void clearCategoryFilter() {
@@ -155,27 +156,41 @@ class TransactionListProvider extends ChangeNotifier {
       _categoryFilter = null;
       changed = true;
     }
-    if (changed) notifyListeners();
+    if (changed) {
+      notifyListeners();
+      _refreshWithFilters();
+    }
   }
 
-  // নতুন মেথড: UI থেকে কল করে ডিলিট করার জন্য
+  /// Pushes queued offline transactions and reloads the list. Called when the
+  /// app resumes or the user switches back onto this screen.
+  Future<void> syncNow() => transactionRepository.refresh();
+
   Future<bool> deleteTransaction(FinanceTransaction transaction) async {
     try {
-      final remoteSource = TransactionRemoteSource(
-        firestore: FirebaseFirestore.instance,
-        auth: FirebaseAuth.instance,
-      );
-      await remoteSource.deleteTransactionWithUserUpdate(transaction);
+      await transactionRepository.deleteTransaction(transaction);
       return true;
-    } catch (e) {
+    } on DataFailure {
+      return false;
+    } catch (_) {
       return false;
     }
   }
 
-  _DateRange? _timeFilterToRange(
-    TransactionTimeFilter filter,
-    DateTime now,
-  ) {
+  /// Sends the active time window and category to `GET /api/transactions` so
+  /// backend-side filtering mirrors the chips the user selected.
+  void _refreshWithFilters() {
+    final range = _timeFilterToRange(_timeFilter, DateTime.now());
+    unawaited(
+      transactionRepository.refreshTransactions(
+        from: range?.start,
+        to: range?.end,
+        category: _categoryFilter,
+      ),
+    );
+  }
+
+  _DateRange? _timeFilterToRange(TransactionTimeFilter filter, DateTime now) {
     switch (filter) {
       case TransactionTimeFilter.thisMonth:
         final start = DateTime(now.year, now.month, 1);

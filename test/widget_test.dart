@@ -3,12 +3,18 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
 import 'package:financemate/app.dart';
+import 'package:financemate/core/storage/secure_storage_service.dart';
+import 'package:financemate/data/repositories/app_lock_repository_impl.dart';
+import 'package:financemate/data/sources/local/app_lock_local_source.dart';
 import 'package:financemate/domain/entities/app_user.dart';
 import 'package:financemate/domain/repositories/auth_repository.dart';
+import 'package:financemate/domain/usecases/set_app_lock_password.dart';
 import 'package:financemate/domain/usecases/sign_in_with_email.dart';
 import 'package:financemate/domain/usecases/sign_out.dart';
 import 'package:financemate/domain/usecases/sign_up_with_email.dart';
+import 'package:financemate/domain/usecases/verify_app_lock_password.dart';
 import 'package:financemate/domain/usecases/watch_auth_state.dart';
+import 'package:financemate/presentation/providers/app_lock_provider.dart';
 import 'package:financemate/presentation/providers/auth_provider.dart';
 import 'package:financemate/presentation/screens/auth_screen.dart';
 
@@ -62,18 +68,38 @@ void main() {
     WidgetTester tester,
   ) async {
     final repository = _FakeAuthRepository();
+    final secureStorage = SecureStorageService();
+    final appLockRepository = AppLockRepositoryImpl(
+      AppLockLocalSource(secureStorage),
+    );
 
     await tester.pumpWidget(
-      ChangeNotifierProvider(
-        create: (_) => AuthProvider(
-          signInWithEmail: SignInWithEmail(repository),
-          signUpWithEmail: SignUpWithEmail(repository),
-          signOutUseCase: SignOut(repository),
-          watchAuthState: WatchAuthState(repository),
-        ),
+      MultiProvider(
+        providers: [
+          Provider<SecureStorageService>.value(value: secureStorage),
+          ChangeNotifierProvider(
+            create: (_) => AuthProvider(
+              signInWithEmail: SignInWithEmail(repository),
+              signUpWithEmail: SignUpWithEmail(repository),
+              signOutUseCase: SignOut(repository),
+              setAppLockPassword: SetAppLockPassword(appLockRepository),
+              watchAuthState: WatchAuthState(repository),
+            ),
+          ),
+          ChangeNotifierProvider(
+            create: (_) => AppLockProvider(
+              setPasswordUseCase: SetAppLockPassword(appLockRepository),
+              verifyPasswordUseCase: VerifyAppLockPassword(appLockRepository),
+              repository: appLockRepository,
+            ),
+          ),
+        ],
         child: const FinanceMateApp(),
       ),
     );
+
+    // Splash screen restores the session, then routes to the auth screen.
+    await tester.pump(const Duration(seconds: 4));
     await tester.pump();
 
     expect(find.byType(MaterialApp), findsOneWidget);

@@ -1,12 +1,12 @@
 import '../../domain/entities/app_user.dart';
 import '../../domain/failures/auth_failure.dart';
 import '../../domain/repositories/auth_repository.dart';
-import '../sources/remote/firebase_auth_remote_source.dart';
+import '../sources/remote/auth_remote_source.dart';
 
 class AuthRepositoryImpl implements AuthRepository {
   AuthRepositoryImpl(this._remoteSource);
 
-  final FirebaseAuthRemoteSource _remoteSource;
+  final AuthRemoteSource _remoteSource;
 
   @override
   Stream<AppUser?> watchAuthState() {
@@ -85,9 +85,7 @@ class AuthRepositoryImpl implements AuthRepository {
     } on AuthFailure {
       rethrow;
     } catch (_) {
-      throw const AuthFailure(
-        'Could not update your email. Sign out and back in, then try again.',
-      );
+      throw const AuthFailure('Could not update your email.');
     }
   }
 

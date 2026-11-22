@@ -1,12 +1,12 @@
 import 'dart:async';
 
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/navigation/app_routes.dart';
 import '../../core/theme/app_palette.dart';
 import '../../domain/entities/app_user.dart';
 import '../../domain/failures/auth_failure.dart';
+import '../../domain/usecases/set_app_lock_password.dart';
 import '../../domain/usecases/sign_in_with_email.dart';
 import '../../domain/usecases/sign_out.dart';
 import '../../domain/usecases/sign_up_with_email.dart';
@@ -19,6 +19,7 @@ class AuthProvider extends ChangeNotifier {
     required this.signInWithEmail,
     required this.signUpWithEmail,
     required this.signOutUseCase,
+    required this.setAppLockPassword,
     required WatchAuthState watchAuthState,
     AppUser? initialUser,
   }) : _user = initialUser {
@@ -31,6 +32,7 @@ class AuthProvider extends ChangeNotifier {
   final SignInWithEmail signInWithEmail;
   final SignUpWithEmail signUpWithEmail;
   final SignOut signOutUseCase;
+  final SetAppLockPassword setAppLockPassword;
   StreamSubscription<AppUser?>? _authSubscription;
 
   AppUser? _user;
@@ -54,7 +56,9 @@ class AuthProvider extends ChangeNotifier {
       action: () => signInWithEmail(email: email.trim(), password: password),
     );
     if (!succeeded || !context.mounted) return;
-    _goToMain(context);
+    await _configureAppLock(password);
+    if (!context.mounted) return;
+    _goToLock(context);
   }
 
   Future<void> signUp({
@@ -73,32 +77,9 @@ class AuthProvider extends ChangeNotifier {
       ),
     );
     if (!succeeded || !context.mounted) return;
-    _goToMain(context);
-  }
-
-  Future<bool> verifyLockPassword(BuildContext context, String password) async {
-    if (_isLoading) return false;
-    _setLoading(true);
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null || user.email == null) {
-        _setLoading(false);
-        return false;
-      }
-      final credential = EmailAuthProvider.credential(
-        email: user.email!,
-        password: password,
-      );
-      await user.reauthenticateWithCredential(credential);
-      _setLoading(false);
-      return true;
-    } catch (_) {
-      _setLoading(false);
-      if (context.mounted) {
-        _showError(context, 'Incorrect password. Please try again.');
-      }
-      return false;
-    }
+    await _configureAppLock(password);
+    if (!context.mounted) return;
+    _goToLock(context);
   }
 
   Future<void> signOut(BuildContext context) async {
@@ -118,6 +99,18 @@ class AuthProvider extends ChangeNotifier {
       _showError(context, 'Could not sign out. Please try again.');
     } finally {
       _setLoading(false);
+    }
+  }
+
+  /// The App Lock password mirrors the account password, so the freshly
+  /// supplied password is hashed (SHA-256) and stored on device right away.
+  Future<void> _configureAppLock(String password) async {
+    if (password.isEmpty) return;
+    try {
+      await setAppLockPassword(password);
+    } catch (_) {
+      // The account is already authenticated; a keystore hiccup must not block
+      // the user from reaching the app.
     }
   }
 
@@ -148,7 +141,7 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  void _goToMain(BuildContext context) {
+  void _goToLock(BuildContext context) {
     Navigator.of(context).pushNamedAndRemoveUntil(
       AppRoutes.lock,
       (route) => false,

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../../domain/entities/finance_transaction.dart';
+import '../../domain/entities/transaction_summary.dart';
 import '../../domain/entities/user_profile.dart';
 import '../../domain/repositories/transaction_repository.dart';
 import '../../domain/repositories/user_repository.dart';
@@ -18,22 +19,40 @@ class HomeProvider extends ChangeNotifier {
 
   StreamSubscription<UserProfile?>? _profileSubscription;
   StreamSubscription<List<FinanceTransaction>>? _transactionsSubscription;
+  StreamSubscription<TransactionSummary?>? _summarySubscription;
 
   String? _uid;
   UserProfile? _profile;
+  TransactionSummary? _summary;
   List<FinanceTransaction> _transactions = const [];
   bool _isLoading = true;
   String? _errorMessage;
 
-  UserProfile get profile =>
-      _profile ??
-      const UserProfile(
-        uid: '',
-        balance: 0,
-        totalIncome: 0,
-        totalExpense: 0,
-        currency: 'BDT',
-      );
+  /// Profile identity (name, currency) merged with the transaction summary.
+  /// Until the summary arrives the profile totals from `/api/users/profile`
+  /// are shown, and if the summary endpoint is unavailable they remain.
+  UserProfile get profile {
+    final base =
+        _profile ??
+        const UserProfile(
+          uid: '',
+          balance: 0,
+          totalIncome: 0,
+          totalExpense: 0,
+          currency: 'BDT',
+        );
+    final summary = _summary;
+    if (summary == null) return base;
+    return UserProfile(
+      uid: base.uid,
+      balance: summary.balance,
+      totalIncome: summary.totalIncome,
+      totalExpense: summary.totalExpense,
+      currency: base.currency,
+      fullName: base.fullName,
+      phoneNumber: base.phoneNumber,
+    );
+  }
 
   List<FinanceTransaction> get recentTransactions =>
       _transactions.take(5).toList(growable: false);
@@ -49,6 +68,7 @@ class HomeProvider extends ChangeNotifier {
 
     if (uid == null || uid.isEmpty) {
       _profile = null;
+      _summary = null;
       _transactions = const [];
       _isLoading = false;
       _errorMessage = null;
@@ -61,6 +81,10 @@ class HomeProvider extends ChangeNotifier {
     notifyListeners();
     _startListening();
   }
+
+  /// Pushes queued offline transactions and reloads the overview. Called when
+  /// the app resumes or the user returns to a data screen.
+  Future<void> syncNow() => transactionRepository.refresh();
 
   Future<void> _startListening() async {
     try {
@@ -79,6 +103,16 @@ class HomeProvider extends ChangeNotifier {
         _errorMessage = error.toString();
         _isLoading = false;
         notifyListeners();
+      },
+    );
+
+    _summarySubscription = transactionRepository.watchSummary().listen(
+      (summary) {
+        _summary = summary;
+        notifyListeners();
+      },
+      onError: (Object _) {
+        // Keep the profile totals when the summary cannot be loaded.
       },
     );
 
@@ -101,8 +135,10 @@ class HomeProvider extends ChangeNotifier {
   void _cancelSubscriptions() {
     _profileSubscription?.cancel();
     _transactionsSubscription?.cancel();
+    _summarySubscription?.cancel();
     _profileSubscription = null;
     _transactionsSubscription = null;
+    _summarySubscription = null;
   }
 
   @override

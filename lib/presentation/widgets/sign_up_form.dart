@@ -9,9 +9,13 @@ import 'auth_validators.dart';
 class SignUpForm extends StatefulWidget {
   const SignUpForm({
     super.key,
+    required this.formKey,
     required this.onSwitchToLogin,
   });
 
+  /// Owned by the parent screen so it can clear this form's validation state
+  /// without validating the sibling log-in form.
+  final GlobalKey<FormState> formKey;
   final VoidCallback onSwitchToLogin;
 
   @override
@@ -19,7 +23,6 @@ class SignUpForm extends StatefulWidget {
 }
 
 class _SignUpFormState extends State<SignUpForm> {
-  final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -33,7 +36,7 @@ class _SignUpFormState extends State<SignUpForm> {
   }
 
   Future<void> _submit() async {
-    if (!(_formKey.currentState?.validate() ?? false)) return;
+    if (!(widget.formKey.currentState?.validate() ?? false)) return;
     await context.read<AuthProvider>().signUp(
       context: context,
       fullName: _nameController.text,
@@ -49,7 +52,7 @@ class _SignUpFormState extends State<SignUpForm> {
     final colors = context.appColors;
 
     return Form(
-      key: _formKey,
+      key: widget.formKey,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

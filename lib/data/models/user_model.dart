@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 import '../../domain/entities/user_profile.dart';
 
 class UserModel {
@@ -21,51 +19,50 @@ class UserModel {
   final String? fullName;
   final String? phoneNumber;
 
-  factory UserModel.fromFirestore(
-    DocumentSnapshot<Map<String, dynamic>> doc,
-  ) {
-    final data = doc.data() ?? const <String, dynamic>{};
+  /// Maps a profile payload from the REST API, tolerating the usual field
+  /// aliases (`id`/`_id`/`userId`/`uid`, `name`/`fullName`/`displayName`, …).
+  factory UserModel.fromJson(Map<String, dynamic> json) {
     return UserModel(
-      uid: data['uid'] as String? ?? doc.id,
-      balance: _toDouble(data['balance']),
-      totalIncome: _toDouble(data['totalIncome']),
-      totalExpense: _toDouble(data['totalExpense']),
-      currency: data['currency'] as String? ?? 'BDT',
-      fullName: data['fullName'] as String?,
-      phoneNumber: data['phoneNumber'] as String?,
+      uid: _firstString(json, const ['id', '_id', 'userId', 'user_id', 'uid']) ??
+          '',
+      balance: _toDouble(json['balance']),
+      totalIncome: _toDouble(json['totalIncome'] ?? json['total_income']),
+      totalExpense: _toDouble(json['totalExpense'] ?? json['total_expense']),
+      currency: _currency(json),
+      fullName: _firstString(json, const [
+        'fullName',
+        'full_name',
+        'name',
+        'displayName',
+        'display_name',
+        'username',
+      ]),
+      phoneNumber: _firstString(json, const [
+        'phoneNumber',
+        'phone_number',
+        'phone',
+      ]),
     );
   }
 
-  factory UserModel.fromEntity(UserProfile profile) {
+  UserModel copyWith({
+    String? uid,
+    double? balance,
+    double? totalIncome,
+    double? totalExpense,
+    String? currency,
+    String? fullName,
+    String? phoneNumber,
+  }) {
     return UserModel(
-      uid: profile.uid,
-      balance: profile.balance,
-      totalIncome: profile.totalIncome,
-      totalExpense: profile.totalExpense,
-      currency: profile.currency,
-      fullName: profile.fullName,
-      phoneNumber: profile.phoneNumber,
+      uid: uid ?? this.uid,
+      balance: balance ?? this.balance,
+      totalIncome: totalIncome ?? this.totalIncome,
+      totalExpense: totalExpense ?? this.totalExpense,
+      currency: currency ?? this.currency,
+      fullName: fullName ?? this.fullName,
+      phoneNumber: phoneNumber ?? this.phoneNumber,
     );
-  }
-
-  Map<String, dynamic> toFirestore() {
-    return {
-      'uid': uid,
-      'balance': balance,
-      'totalIncome': totalIncome,
-      'totalExpense': totalExpense,
-      'currency': currency,
-      'fullName': fullName,
-      'phoneNumber': phoneNumber,
-    };
-  }
-
-  Map<String, dynamic> toFirestorePartialUpdate() {
-    return {
-      'currency': currency,
-      if (fullName != null) 'fullName': fullName,
-      if (phoneNumber != null) 'phoneNumber': phoneNumber,
-    };
   }
 
   UserProfile toEntity() {
@@ -80,8 +77,27 @@ class UserModel {
     );
   }
 
+  static String _currency(Map<String, dynamic> json) {
+    final code = _firstString(json, const [
+      'currency',
+      'currencyCode',
+      'currency_code',
+    ]);
+    return (code ?? 'BDT').toUpperCase();
+  }
+
   static double _toDouble(Object? value) {
     if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? 0;
     return 0;
+  }
+
+  static String? _firstString(Map<String, dynamic> json, List<String> keys) {
+    for (final key in keys) {
+      final value = json[key];
+      if (value is String && value.trim().isNotEmpty) return value.trim();
+      if (value is num) return '$value';
+    }
+    return null;
   }
 }

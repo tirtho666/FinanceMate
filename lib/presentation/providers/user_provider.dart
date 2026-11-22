@@ -4,6 +4,7 @@ import '../../domain/entities/app_user.dart';
 import '../../domain/entities/user_profile.dart';
 import '../../domain/failures/auth_failure.dart';
 import '../../domain/failures/data_failure.dart';
+import '../../domain/repositories/app_lock_repository.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../../domain/usecases/change_password.dart';
 import '../../domain/usecases/update_currency.dart';
@@ -15,6 +16,7 @@ class UserProvider extends ChangeNotifier {
     required this.changePasswordUseCase,
     required this.updateCurrencyUseCase,
     required this.authRepository,
+    required this.appLockRepository,
     AppUser? initialUser,
   }) : _authUser = initialUser;
 
@@ -22,6 +24,7 @@ class UserProvider extends ChangeNotifier {
   final ChangePassword changePasswordUseCase;
   final UpdateCurrency updateCurrencyUseCase;
   final AuthRepository authRepository;
+  final AppLockRepository appLockRepository;
 
   AppUser? _authUser;
   bool _isLoading = false;
@@ -121,6 +124,7 @@ class UserProvider extends ChangeNotifier {
         currentPassword: currentPassword,
         newPassword: newPassword,
       );
+      await _syncAppLockPassword(newPassword);
       _successMessage = 'Password changed successfully!';
       return true;
     } on AuthFailure catch (failure) {
@@ -132,6 +136,15 @@ class UserProvider extends ChangeNotifier {
     } finally {
       _setLoading(false);
     }
+  }
+
+  /// The dual-security App Lock mirrors the account password, so a successful
+  /// change must re-hash it immediately (SHA-256) and store the new hash in
+  /// secure storage. Otherwise the next app open would reject the new password.
+  /// An App Lock that was never configured is left untouched.
+  Future<void> _syncAppLockPassword(String newPassword) async {
+    if (!appLockRepository.isEnabled) return;
+    await appLockRepository.setPassword(newPassword);
   }
 
   Future<bool> updateCurrency(String currency) async {
