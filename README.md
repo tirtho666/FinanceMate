@@ -1,78 +1,67 @@
-# FinanceMate 💰
+# FinanceMate
 
-A full-stack personal finance and expense tracking mobile application built with Flutter. Designed with a strict Clean Architecture and an Offline-First approach, FinanceMate provides real-time financial tracking, multi-currency support, and enterprise-grade dual security.
+A personal finance and expense tracking mobile app built with Flutter, backed by a custom Node.js and PostgreSQL REST API. The app is designed around Clean Architecture and an offline-first workflow so transactions can be recorded, filtered, and managed reliably even without an active internet connection.
 
-## 🚀 Tech Stack
+- **Backend Repository:** [github.com/tirtho666/FinanceMate-Backend](https://github.com/tirtho666/FinanceMate-Backend)
+- **Live API Base URL:** `https://financemate-backend.onrender.com`
 
-### Mobile Client (Frontend)
-* **Framework:** Flutter & Dart
-* **State Management:** Provider
-* **Offline Caching & Local Storage:** `sqflite` & `shared_preferences`
-* **Security:** `flutter_secure_storage` & `crypto` (SHA-256 local hashing)
-* **Networking:** `http` (REST API integration)
+## Tech Stack
 
-### Server & Database (Backend)
-* **Runtime & Framework:** Node.js & Express.js (Clean Architecture)
-* **Database:** PostgreSQL (Hosted on Neon)
-* **Authentication:** JWT (30-day expiry) & `bcrypt` (10 salt rounds)
-* **Deployment:** Render (Web Service)
+**Mobile App (Frontend)**
+- **Framework:** Flutter & Dart
+- **State Management:** Provider
+- **Local Database & Storage:** `sqflite` (offline transaction queue & cache), `shared_preferences`
+- **Security:** `flutter_secure_storage` & `crypto` (local SHA-256 password hashing)
+- **Networking:** `http`
 
-## 🏗️ Architecture
+**Backend & Database**
+- **Runtime & Framework:** Node.js & Express.js
+- **Database:** PostgreSQL (hosted on Neon)
+- **Authentication:** JWT (30-day expiry) & `bcrypt`
+- **Hosting:** Render
 
-This project strictly follows **Clean Architecture** principles to separate concerns and maintain a scalable codebase:
-* **Presentation Layer:** Flutter UI screens, custom widgets, and Provider state management.
-* **Domain Layer:** Core business logic, financial summary calculations, and use cases.
-* **Data Layer:** Repository pattern managing remote REST API calls and local SQLite caching with automatic background sync.
+## Project Architecture
 
-## ✨ Key Features
+The codebase is organized into three separate layers following Clean Architecture:
 
-* **Dual-Layer Security & App Lock:** 
-  * Cloud endpoints protected via JWT Bearer tokens.
-  * Device-level **App Lock** powered by synchronous SHA-256 password hashing stored in `flutter_secure_storage`, verified locally in RAM on app launch.
-  * Automatic local App Lock sync whenever the cloud password is updated.
-* **Offline-First Transaction Engine:** 
-  * Record income and expenses without internet using `sqflite`.
-  * Automatic background sync (`POST`) to PostgreSQL when internet connectivity returns.
-* **Dynamic Financial Overview:** 
-  * Real-time calculation of Current Balance, Total Income, and Total Expense.
-  * Filter transactions by timeframe (`This Month`, `Last Month`) and custom categories.
-* **Multi-Currency Support:** Persistent global currency selection saved via `shared_preferences`.
+- **Presentation:** UI screens, reusable widgets, custom category grids, and Provider classes for reactive state updates.
+- **Domain:** Core entities (`FinanceTransaction`, `UserProfile`, `TransactionSummary`), repository contracts, and failure handling.
+- **Data:** Remote API data sources, local SQLite storage (`sqflite`), and repository implementations handling offline queuing and background synchronization.
 
-## 🔌 REST API Endpoints
+## Features
+
+- **Offline-First Transaction Engine:** Add or delete transactions offline using local SQLite storage. Queued records sync automatically with PostgreSQL once connectivity is restored.
+- **Instant UI & Live Summary:** Optimistic deletion and real-time recalculation immediately update Current Balance, Total Income, and Total Expense across the dashboard.
+- **Filtering & History:** Filter transactions by timeframe (`All`, `This Month`, `Last Month`) and specific categories.
+- **Dual-Layer Security:** Cloud API routes are secured with JWT Bearer tokens, while an optional device-level App Lock verifies a locally stored SHA-256 password hash on launch.
+- **Multi-Currency Support:** Persistent currency formatting saved locally via `shared_preferences`.
+
+## API Endpoints
 
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
 | `POST` | `/api/auth/signup` | Register a new user account |
-| `POST` | `/api/auth/login` | Authenticate user & issue 30-day JWT |
-| `GET` | `/api/users/profile` | Retrieve authenticated user profile |
-| `PUT` | `/api/users/profile` | Update user details (Name, Phone, Photo) |
-| `PUT` | `/api/users/change-password` | Update password & sync local App Lock |
-| `POST` | `/api/transactions` | Add a new income or expense record |
-| `GET` | `/api/transactions` | Fetch transactions (`?month=`, `?category=`) |
-| `GET` | `/api/transactions/summary` | Get Current Balance, Total Income & Expense |
+| `POST` | `/api/auth/login` | Authenticate user and issue a 30-day JWT |
+| `GET` | `/api/users/profile` | Fetch authenticated user profile |
+| `PATCH` | `/api/users/profile` | Update user profile details |
+| `POST` | `/api/users/change-password` | Update account password and sync local App Lock |
+| `POST` | `/api/transactions` | Create a new income or expense record |
+| `GET` | `/api/transactions` | Fetch transactions (supports date range & category filters) |
+| `PUT` | `/api/transactions/:id` | Update an existing transaction |
+| `DELETE` | `/api/transactions/:id` | Delete a transaction |
+| `GET` | `/api/transactions/summary` | Retrieve overall balance, income, and expense totals |
 
-## 🗺️ Development Roadmap
+## Development Progress
 
-* [x] **Phase 0:** Core Flutter UI/UX & Initial Prototype
-* [ ] **Phase 1:** Node.js + Express Backend & Neon PostgreSQL Setup
-* [ ] **Phase 2:** REST API Deployment on Render Web Service
-* [ ] **Phase 3:** Flutter Migration (Firebase Removal & REST API Integration)
-* [ ] **Phase 4:** Dual Security App Lock & SQLite Offline Sync
+- [x] **Phase 0:** Core Flutter UI/UX, Custom Category Grid & Initial Prototype
+- [x] **Phase 1:** Node.js + Express REST API & Neon PostgreSQL Schema Setup
+- [x] **Phase 2:** Backend Deployment on Render
+- [x] **Phase 3:** Full Migration from Firebase to Custom REST API
+- [x] **Phase 4:** SQLite Offline Sync, Optimistic Delete & SHA-256 App Lock
 
-## ⚙️ Local Setup
+## Getting Started
 
 1. **Clone the repository:**
    ```bash
    git clone [https://github.com/tirtho666/FinanceMate.git](https://github.com/tirtho666/FinanceMate.git)
    cd FinanceMate
-   ```
-2. **Install dependencies:**
-   ```bash
-   flutter pub get
-   ```
-3. **Configure API URL:**
-   Add your live Render backend URL in the API configuration file.
-4. **Run the app:**
-   ```bash
-   flutter run
-   ```
