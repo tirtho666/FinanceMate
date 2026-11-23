@@ -3,7 +3,7 @@
 A personal finance and expense tracking mobile app built with Flutter, backed by a custom Node.js and PostgreSQL REST API. The app is designed around Clean Architecture and an offline-first workflow so transactions can be recorded, filtered, and managed reliably even without an active internet connection.
 
 - **Backend Repository:** [github.com/tirtho666/FinanceMate-Backend](https://github.com/tirtho666/FinanceMate-Backend)
-- **Live API Base URL:** `https://financemate-backend.onrender.com`
+- **Live API Base URL:** `[https://financemate-backend.onrender.com](https://financemate-backend.onrender.com)`
 
 ## Tech Stack
 
@@ -63,5 +63,17 @@ The codebase is organized into three separate layers following Clean Architectur
 
 1. **Clone the repository:**
    ```bash
-   git clone [https://github.com/tirtho666/FinanceMate.git](https://github.com/tirtho666/FinanceMate.git)
+   git clone https://github.com/tirtho666/FinanceMate.git
    cd FinanceMate
+   ```
+
+2. **Install dependencies:**
+   ```bash
+   flutter pub get
+   ```
+
+3. **Run the app:**
+   ```bash
+   flutter run
+   ```
+   *(The app connects directly to `https://financemate-backend.onrender.com` out of the box.)*
