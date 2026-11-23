@@ -87,8 +87,6 @@ class TransactionRepositoryImpl implements TransactionRepository {
       await _localSource.replaceRemoteTransactions(
         userId,
         _withUser(remote, userId),
-        // A filtered response is a subset, so cached rows outside the window
-        // must be kept; only an unfiltered fetch may prune stale rows.
         pruneMissing: from == null && to == null && categoryFilter == null,
       );
     } on DataFailure {
@@ -127,9 +125,7 @@ class TransactionRepositoryImpl implements TransactionRepository {
           );
           syncedAny = true;
         } on DataFailure catch (failure) {
-          // Still offline: keep the rest of the queue for the next attempt.
           if (failure.isOffline) break;
-          // The backend rejected this one; leave it queued and carry on.
         }
       }
     } finally {
@@ -164,8 +160,6 @@ class TransactionRepositoryImpl implements TransactionRepository {
     required DateTime date,
     String? note,
   }) {
-    // The backend updates the user's totals atomically with the insert, so this
-    // maps to the same endpoint as [addTransaction].
     return _createTransaction(
       type: type,
       amount: amount,
@@ -217,20 +211,20 @@ class TransactionRepositoryImpl implements TransactionRepository {
     final userId = _requireUserId();
     await _localSource.init();
 
-    if (await _localSource.isPending(transaction.id)) {
-      // Never reached the backend yet — nothing to delete remotely.
-      await _localSource.deleteTransaction(transaction.id);
-      return;
+    final isLocalOnly =
+        transaction.id.startsWith('local-') ||
+        await _localSource.isPending(transaction.id);
+
+    await _localSource.deleteTransaction(transaction.id);
+
+    if (!isLocalOnly) {
+      try {
+        await _remoteSource.deleteTransaction(transaction.id);
+      } catch (_) {
+        // Offline or server error: local deletion already succeeded.
+      }
     }
 
-    try {
-      await _remoteSource.deleteTransaction(transaction.id);
-    } on DataFailure {
-      rethrow;
-    } catch (_) {
-      throw const DataFailure('Could not delete the transaction.');
-    }
-    await _localSource.deleteTransaction(transaction.id);
     unawaited(_refreshSummary(userId));
   }
 
@@ -263,7 +257,6 @@ class TransactionRepositoryImpl implements TransactionRepository {
     } on DataFailure catch (failure) {
       if (!failure.isOffline) rethrow;
 
-      // Offline: keep the transaction locally and replay it once we're back.
       final queued = TransactionModel(
         id: _newLocalId(),
         userId: userId,
@@ -278,9 +271,6 @@ class TransactionRepositoryImpl implements TransactionRepository {
     }
   }
 
-  /// The cached summary plus the deltas of everything still queued offline, so
-  /// the overview reflects an offline transaction immediately. Returns `null`
-  /// while nothing is known yet, letting the caller fall back to the profile.
   Future<TransactionSummary?> _readSummary() async {
     final userId = _userId;
     if (userId == null) return null;
@@ -330,8 +320,6 @@ class TransactionRepositoryImpl implements TransactionRepository {
     }
   }
 
-  /// Emits the cached value as soon as a listener attaches, re-emits on every
-  /// local change, and kicks off a sync + backend refresh in the background.
   Stream<T> _watch<T>(
     Future<T> Function() read, {
     required Future<void> Function(String userId) refresh,
@@ -370,8 +358,6 @@ class TransactionRepositoryImpl implements TransactionRepository {
 
   Future<void> _restore() => _storage.restore();
 
-  /// Pushes the offline queue first, then reloads, so a reconnecting device
-  /// uploads its queued writes before pulling the fresh state back.
   Future<void> _syncThenRefresh(
     String userId,
     Future<void> Function(String userId) refresh,

@@ -42,6 +42,7 @@ class TransactionListProvider extends ChangeNotifier {
   String? _categoryFilter;
   bool _isLoading = true;
   String? _errorMessage;
+  String? _actionErrorMessage;
 
   List<FinanceTransaction> get allTransactions =>
       List.unmodifiable(_allTransactions);
@@ -52,12 +53,10 @@ class TransactionListProvider extends ChangeNotifier {
   String? get categoryFilter => _categoryFilter;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
+  String? get actionErrorMessage => _actionErrorMessage;
   bool get hasCategoryFilter =>
       _categoryFilter != null && _categoryFilter!.trim().isNotEmpty;
 
-  /// Local filtering keeps the list instant and usable offline; the same
-  /// filters are also sent to the backend (see [_refreshWithFilters]) so the
-  /// cached window stays in sync with what the UI is showing.
   List<FinanceTransaction> get filteredTransactions {
     final range = _timeFilterToRange(_timeFilter, DateTime.now());
     final category = _categoryFilter?.trim().toLowerCase();
@@ -106,8 +105,7 @@ class TransactionListProvider extends ChangeNotifier {
         _profile = profile;
         notifyListeners();
       },
-      onError: (Object _) {
-      },
+      onError: (Object _) {},
     );
 
     _txnSubscription = transactionRepository
@@ -162,23 +160,26 @@ class TransactionListProvider extends ChangeNotifier {
     }
   }
 
-  /// Pushes queued offline transactions and reloads the list. Called when the
-  /// app resumes or the user switches back onto this screen.
   Future<void> syncNow() => transactionRepository.refresh();
 
   Future<bool> deleteTransaction(FinanceTransaction transaction) async {
+    _actionErrorMessage = null;
     try {
       await transactionRepository.deleteTransaction(transaction);
+      _allTransactions = _allTransactions
+          .where((item) => item.id != transaction.id)
+          .toList(growable: false);
+      notifyListeners();
       return true;
-    } on DataFailure {
+    } on DataFailure catch (failure) {
+      _actionErrorMessage = failure.message;
       return false;
     } catch (_) {
+      _actionErrorMessage = 'Could not delete the transaction.';
       return false;
     }
   }
 
-  /// Sends the active time window and category to `GET /api/transactions` so
-  /// backend-side filtering mirrors the chips the user selected.
   void _refreshWithFilters() {
     final range = _timeFilterToRange(_timeFilter, DateTime.now());
     unawaited(

@@ -28,9 +28,9 @@ class HomeProvider extends ChangeNotifier {
   bool _isLoading = true;
   String? _errorMessage;
 
-  /// Profile identity (name, currency) merged with the transaction summary.
-  /// Until the summary arrives the profile totals from `/api/users/profile`
-  /// are shown, and if the summary endpoint is unavailable they remain.
+  /// Profile identity (name, currency) combined with live totals calculated
+  /// directly from the active transactions list so adding or deleting any
+  /// item updates Balance, Income, and Expense immediately.
   UserProfile get profile {
     final base =
         _profile ??
@@ -41,13 +41,36 @@ class HomeProvider extends ChangeNotifier {
           totalExpense: 0,
           currency: 'BDT',
         );
-    final summary = _summary;
-    if (summary == null) return base;
+
+    if (_isLoading && _transactions.isEmpty) {
+      final summary = _summary;
+      if (summary == null) return base;
+      return UserProfile(
+        uid: base.uid,
+        balance: summary.balance,
+        totalIncome: summary.totalIncome,
+        totalExpense: summary.totalExpense,
+        currency: base.currency,
+        fullName: base.fullName,
+        phoneNumber: base.phoneNumber,
+      );
+    }
+
+    var income = 0.0;
+    var expense = 0.0;
+    for (final txn in _transactions) {
+      if (txn.type == TransactionType.income) {
+        income += txn.amount;
+      } else {
+        expense += txn.amount;
+      }
+    }
+
     return UserProfile(
       uid: base.uid,
-      balance: summary.balance,
-      totalIncome: summary.totalIncome,
-      totalExpense: summary.totalExpense,
+      balance: income - expense,
+      totalIncome: income,
+      totalExpense: expense,
       currency: base.currency,
       fullName: base.fullName,
       phoneNumber: base.phoneNumber,
