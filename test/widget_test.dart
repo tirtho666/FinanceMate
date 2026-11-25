@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
@@ -17,6 +18,8 @@ import 'package:financemate/domain/usecases/watch_auth_state.dart';
 import 'package:financemate/presentation/providers/app_lock_provider.dart';
 import 'package:financemate/presentation/providers/auth_provider.dart';
 import 'package:financemate/presentation/screens/auth_screen.dart';
+import 'package:financemate/presentation/screens/login_screen.dart';
+import 'package:financemate/presentation/screens/sign_up_screen.dart';
 
 class _FakeAuthRepository implements AuthRepository {
   @override
@@ -64,7 +67,11 @@ class _FakeAuthRepository implements AuthRepository {
 }
 
 void main() {
-  testWidgets('Auth screen shows logo and login/sign up forms', (
+  setUpAll(() {
+    FlutterSecureStorage.setMockInitialValues({});
+  });
+
+  testWidgets('Auth screen shows the login design and the sign up link', (
     WidgetTester tester,
   ) async {
     final repository = _FakeAuthRepository();
@@ -104,9 +111,33 @@ void main() {
 
     expect(find.byType(MaterialApp), findsOneWidget);
     expect(find.byType(AuthScreen), findsOneWidget);
-    expect(find.text('LOG IN'), findsOneWidget);
-    expect(find.text('SIGN UP'), findsOneWidget);
-    expect(find.text('Log In'), findsWidgets);
-    expect(find.text('Sign Up'), findsWidgets);
+    expect(find.byType(LoginScreen), findsOneWidget);
+    expect(find.text('Welcome Back'), findsOneWidget);
+    expect(find.text('Sign in to your account'), findsOneWidget);
+    expect(find.text('Email Address'), findsOneWidget);
+    expect(find.text('Password'), findsOneWidget);
+    expect(find.text('Log In'), findsOneWidget);
+    expect(find.textContaining('Sign Up'), findsOneWidget);
+
+    final signUpLink = find.textContaining('Sign Up');
+    await tester.ensureVisible(signUpLink);
+    await tester.pumpAndSettle();
+    await tester.tap(signUpLink);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SignUpScreen), findsOneWidget);
+    expect(find.text('Create Account'), findsOneWidget);
+    expect(find.text('Sign up to get started'), findsOneWidget);
+    expect(find.text('Full Name'), findsOneWidget);
+    expect(find.text('Sign Up'), findsOneWidget);
+
+    final logInLink = find.text('Already have an account? Log In');
+    await tester.ensureVisible(logInLink);
+    await tester.pumpAndSettle();
+    await tester.tap(logInLink);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SignUpScreen), findsNothing);
+    expect(find.text('Welcome Back'), findsOneWidget);
   });
 }

@@ -6,6 +6,7 @@ import 'core/navigation/app_routes.dart';
 import 'core/storage/secure_storage_service.dart';
 import 'core/theme/app_theme.dart';
 import 'presentation/providers/app_lock_provider.dart';
+import 'presentation/widgets/auth_logo.dart';
 
 class FinanceMateApp extends StatelessWidget {
   const FinanceMateApp({super.key});
@@ -76,11 +77,7 @@ class _SplashScreenState extends State<SplashScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Image.asset(
-              'assets/image_0.png',
-              width: 200,
-              fit: BoxFit.contain,
-            ),
+            const AuthLogo(iconSize: 96, fontSize: 30),
             const SizedBox(height: 32),
             const CircularProgressIndicator(
               color: Color(0xFF082E4A),

@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/navigation/app_routes.dart';
-import '../../core/theme/app_colors.dart';
 import '../providers/app_lock_provider.dart';
 import '../providers/auth_provider.dart';
-import '../widgets/auth_logo.dart';
-import '../widgets/login_form.dart';
-import '../widgets/sign_up_form.dart';
+import 'login_screen.dart';
+import 'sign_up_screen.dart';
 
+/// Authentication entry point. Unauthenticated users land on [LoginScreen]
+/// and can open [SignUpScreen] from the sign-up link.
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
 
@@ -17,15 +17,6 @@ class AuthScreen extends StatefulWidget {
 }
 
 class _AuthScreenState extends State<AuthScreen> {
-  final _scrollController = ScrollController();
-  final _loginKey = GlobalKey();
-  final _signUpKey = GlobalKey();
-  // Each form owns its validation through its own [FormState], so submitting
-  // one never validates the other. The screen keeps the keys so that switching
-  // forms can clear the form the user is leaving.
-  final _loginFormKey = GlobalKey<FormState>();
-  final _signUpFormKey = GlobalKey<FormState>();
-
   @override
   void initState() {
     super.initState();
@@ -44,85 +35,31 @@ class _AuthScreenState extends State<AuthScreen> {
     );
   }
 
-  /// Clears the form being left before scrolling to the other one, so the
-  /// inactive form never keeps stale validation errors on screen.
-  void _switchToSignUp() {
-    _loginFormKey.currentState?.reset();
-    _scrollTo(_signUpKey);
-  }
-
-  void _switchToLogin() {
-    _signUpFormKey.currentState?.reset();
-    _scrollTo(_loginKey);
-  }
-
-  Future<void> _scrollTo(GlobalKey key) async {
-    final target = key.currentContext;
-    if (target == null) return;
-    await Scrollable.ensureVisible(
-      target,
-      duration: const Duration(milliseconds: 350),
-      curve: Curves.easeInOut,
-      alignment: 0.1,
+  void _openSignUp() {
+    Navigator.of(context).push(
+      PageRouteBuilder<void>(
+        transitionDuration: const Duration(milliseconds: 280),
+        reverseTransitionDuration: const Duration(milliseconds: 220),
+        pageBuilder: (context, animation, secondaryAnimation) {
+          return SignUpScreen(
+            onSwitchToLogin: () => Navigator.of(context).pop(),
+          );
+        },
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return FadeTransition(
+            opacity: CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeOut,
+            ),
+            child: child,
+          );
+        },
+      ),
     );
-  }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.appColors;
-
-    return Scaffold(
-      backgroundColor: colors.background,
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            return SingleChildScrollView(
-              controller: _scrollController,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  minHeight: constraints.maxHeight - 32,
-                ),
-                child: Align(
-                  alignment: Alignment.topCenter,
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 420),
-                    child: Column(
-                      children: [
-                        const SizedBox(height: 8),
-                        const AuthLogo(),
-                        const SizedBox(height: 28),
-                        KeyedSubtree(
-                          key: _loginKey,
-                          child: LoginForm(
-                            formKey: _loginFormKey,
-                            onSwitchToSignUp: _switchToSignUp,
-                          ),
-                        ),
-                        const SizedBox(height: 32),
-                        KeyedSubtree(
-                          key: _signUpKey,
-                          child: SignUpForm(
-                            formKey: _signUpFormKey,
-                            onSwitchToLogin: _switchToLogin,
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
-      ),
-    );
+    return LoginScreen(onSwitchToSignUp: _openSignUp);
   }
 }

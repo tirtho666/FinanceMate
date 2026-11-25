@@ -107,9 +107,19 @@ class TransactionRemoteSource {
   }
 
   /// `DELETE /api/transactions/:id`.
+  ///
+  /// Sends the persisted `Authorization: Bearer <token>` header (attached by
+  /// [ApiClient]) to the exact server primary key. The backend must confirm with
+  /// `200` or `204`; every other status — including `404` — is turned into a
+  /// [DataFailure] carrying the HTTP status code and the server message, so a
+  /// rejected delete is never mistaken for a success.
   Future<void> deleteTransaction(String id) async {
+    final trimmed = id.trim();
+    if (trimmed.isEmpty) {
+      throw const DataFailure('Could not delete the transaction.');
+    }
     try {
-      await _api.delete('$_transactionsPath/$id');
+      await _api.delete('$_transactionsPath/$trimmed');
     } on ApiException catch (error) {
       throw DataFailure(error.message, statusCode: error.statusCode);
     }

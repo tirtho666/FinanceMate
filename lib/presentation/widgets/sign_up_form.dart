@@ -2,20 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_palette.dart';
 import '../providers/auth_provider.dart';
 import 'auth_text_field.dart';
 import 'auth_validators.dart';
 
+/// Name, email, and password form used by the sign-up screen.
 class SignUpForm extends StatefulWidget {
-  const SignUpForm({
-    super.key,
-    required this.formKey,
-    required this.onSwitchToLogin,
-  });
+  const SignUpForm({super.key, required this.onSwitchToLogin});
 
-  /// Owned by the parent screen so it can clear this form's validation state
-  /// without validating the sibling log-in form.
-  final GlobalKey<FormState> formKey;
   final VoidCallback onSwitchToLogin;
 
   @override
@@ -23,6 +18,7 @@ class SignUpForm extends StatefulWidget {
 }
 
 class _SignUpFormState extends State<SignUpForm> {
+  final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -36,7 +32,7 @@ class _SignUpFormState extends State<SignUpForm> {
   }
 
   Future<void> _submit() async {
-    if (!(widget.formKey.currentState?.validate() ?? false)) return;
+    if (!(_formKey.currentState?.validate() ?? false)) return;
     await context.read<AuthProvider>().signUp(
       context: context,
       fullName: _nameController.text,
@@ -49,21 +45,12 @@ class _SignUpFormState extends State<SignUpForm> {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final textTheme = context.textTheme;
-    final colors = context.appColors;
 
     return Form(
-      key: widget.formKey,
+      key: _formKey,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            'SIGN UP',
-            style: textTheme.titleSmall?.copyWith(
-              letterSpacing: 1.4,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 12),
           AuthTextField(
             controller: _nameController,
             hintText: 'Full Name',
@@ -94,10 +81,24 @@ class _SignUpFormState extends State<SignUpForm> {
             validator: AuthValidators.password,
             onFieldSubmitted: (_) => _submit(),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 18),
           SizedBox(
-            height: 48,
+            height: 54,
             child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                elevation: 0,
+                backgroundColor: AppPalette.authNavy,
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: AppPalette.authNavy.withValues(
+                  alpha: 0.5,
+                ),
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(12)),
+                ),
+                textStyle: textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
               onPressed: auth.isLoading ? null : _submit,
               child: auth.isSigningUp
                   ? const SizedBox(
@@ -111,23 +112,33 @@ class _SignUpFormState extends State<SignUpForm> {
                   : const Text('Sign Up'),
             ),
           ),
-          const SizedBox(height: 8),
-          Wrap(
-            alignment: WrapAlignment.center,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              Text('Already have an account? ', style: textTheme.bodyMedium),
-              TextButton(
-                onPressed: auth.isLoading ? null : widget.onSwitchToLogin,
-                style: TextButton.styleFrom(
-                  foregroundColor: colors.primary,
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-                child: const Text('Log In'),
+          const SizedBox(height: 16),
+          Center(
+            child: TextButton(
+              onPressed: auth.isLoading ? null : widget.onSwitchToLogin,
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
-            ],
+              child: Text.rich(
+                TextSpan(
+                  text: 'Already have an account? ',
+                  style: textTheme.bodyMedium?.copyWith(
+                    color: AppPalette.authSubtitle,
+                  ),
+                  children: [
+                    TextSpan(
+                      text: 'Log In',
+                      style: textTheme.bodyMedium?.copyWith(
+                        color: AppPalette.authNavy,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ],
       ),

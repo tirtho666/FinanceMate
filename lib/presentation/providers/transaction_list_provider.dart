@@ -166,14 +166,31 @@ class TransactionListProvider extends ChangeNotifier {
   /// app resumes or the user switches back onto this screen.
   Future<void> syncNow() => transactionRepository.refresh();
 
-  Future<bool> deleteTransaction(FinanceTransaction transaction) async {
+  /// Permanently deletes the transaction on the backend and in the SQLite cache,
+  /// then updates the in-memory list so this screen (and the Home overview bound
+  /// to the same stream) refresh immediately.
+  ///
+  /// Returns `null` once the delete is confirmed, otherwise the exact failure
+  /// message. The optimistic removal is rolled back so a rejected delete never
+  /// leaves the UI showing a stale state.
+  Future<String?> deleteTransaction(FinanceTransaction transaction) async {
+    final previous = _allTransactions;
+    _allTransactions = previous
+        .where((item) => item.id != transaction.id)
+        .toList(growable: false);
+    notifyListeners();
+
     try {
       await transactionRepository.deleteTransaction(transaction);
-      return true;
-    } on DataFailure {
-      return false;
+      return null;
+    } on DataFailure catch (failure) {
+      _allTransactions = previous;
+      notifyListeners();
+      return failure.message;
     } catch (_) {
-      return false;
+      _allTransactions = previous;
+      notifyListeners();
+      return 'Could not delete the transaction. Please try again.';
     }
   }
 

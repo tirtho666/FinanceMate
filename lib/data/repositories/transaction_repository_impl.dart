@@ -103,13 +103,14 @@ class TransactionRepositoryImpl implements TransactionRepository {
     if (userId == null || _syncing) return;
     await _localSource.init();
 
-    final pending = await _localSource.readPending(userId);
-    if (pending.isEmpty) return;
-
     _syncing = true;
     var syncedAny = false;
     try {
-      for (final item in pending) {
+      // Flush the offline deletions before uploading anything, so a row the user
+      // removed can never be re-created by a queued insert.
+      if (await _flushPendingDeletes(userId)) syncedAny = true;
+
+      for (final item in await _localSource.readPending(userId)) {
         try {
           final stored = await _remoteSource.createTransaction(
             type: _typeOf(item.type),
@@ -217,20 +218,45 @@ class TransactionRepositoryImpl implements TransactionRepository {
     final userId = _requireUserId();
     await _localSource.init();
 
-    if (await _localSource.isPending(transaction.id)) {
-      // Never reached the backend yet — nothing to delete remotely.
-      await _localSource.deleteTransaction(transaction.id);
+    // Only the backend primary key captured from `GET /api/transactions` can
+    // delete the row remotely — never a local placeholder id.
+    final id = transaction.id.trim();
+    if (id.isEmpty) {
+      throw const DataFailure('Could not delete the transaction.');
+    }
+
+    // A transaction that never reached the backend — created offline, still
+    // queued (`pending_sync = 1`) or carrying a temporary `local-…` id — only
+    // lives in SQLite, so dropping the row is the whole delete. Nothing is
+    // queued remotely.
+    if (_isLocalId(id) || await _localSource.isPending(id)) {
+      await _localSource.deleteTransaction(id);
+      unawaited(_refreshSummary(userId));
       return;
     }
 
     try {
-      await _remoteSource.deleteTransaction(transaction.id);
-    } on DataFailure {
-      rethrow;
+      // Online: the backend must confirm (`200`/`204`) before the cached row is
+      // dropped, so the two stores never drift apart.
+      await _remoteSource.deleteTransaction(id);
+    } on DataFailure catch (failure) {
+      if (failure.isOffline) {
+        // No connection (socket error, DNS, timeout): flag the row for deletion
+        // so it leaves the list and the balance at once, and replay the
+        // `DELETE` on the next sync.
+        await _localSource.markPendingDelete(id);
+        unawaited(_refreshSummary(userId));
+        return;
+      }
+      // `404` means the row is already gone on the server, so the delete is a
+      // success. Every other status (`400`, `401`, `500`, …) is a real failure
+      // and is surfaced instead of silently dropping the local copy.
+      if (failure.statusCode != 404) rethrow;
     } catch (_) {
       throw const DataFailure('Could not delete the transaction.');
     }
-    await _localSource.deleteTransaction(transaction.id);
+
+    await _localSource.deleteTransaction(id);
     unawaited(_refreshSummary(userId));
   }
 
@@ -287,11 +313,15 @@ class TransactionRepositoryImpl implements TransactionRepository {
 
     final cached = await _localSource.readSummary(userId);
     final pending = await _localSource.readPending(userId);
-    if (cached == null && pending.isEmpty) return null;
+    final pendingDeletes = await _localSource.readPendingDeletes(userId);
+    if (cached == null && pending.isEmpty && pendingDeletes.isEmpty) {
+      return null;
+    }
 
     var balance = cached?.balance ?? 0;
     var income = cached?.totalIncome ?? 0;
     var expense = cached?.totalExpense ?? 0;
+    // Offline creates add to the cached (server) totals…
     for (final item in pending) {
       if (item.type == TransactionType.income.name) {
         balance += item.amount;
@@ -301,11 +331,52 @@ class TransactionRepositoryImpl implements TransactionRepository {
         expense += item.amount;
       }
     }
+    // …while offline deletions subtract from them, so the balance tracks the
+    // list even before the queued `DELETE` reaches the backend.
+    for (final item in pendingDeletes) {
+      if (item.type == TransactionType.income.name) {
+        balance -= item.amount;
+        income -= item.amount;
+      } else {
+        balance += item.amount;
+        expense -= item.amount;
+      }
+    }
     return TransactionSummary(
       balance: balance,
       totalIncome: income,
       totalExpense: expense,
     );
+  }
+
+  /// Replays every locally queued deletion (`pending_delete = 1`) on the
+  /// backend. A row is dropped from SQLite once the server confirms with
+  /// `200`/`204`, or with `404` because it is already gone. Returns `true` when
+  /// at least one row was removed so the caller can refresh the summary.
+  Future<bool> _flushPendingDeletes(String userId) async {
+    final pending = await _localSource.readPendingDeletes(userId);
+    if (pending.isEmpty) return false;
+
+    var removedAny = false;
+    for (final item in pending) {
+      try {
+        await _remoteSource.deleteTransaction(item.id);
+        await _localSource.deleteTransaction(item.id);
+        removedAny = true;
+      } on DataFailure catch (failure) {
+        // Still offline: keep the rest of the queue for the next attempt.
+        if (failure.isOffline) break;
+        if (failure.statusCode == 404) {
+          // Already gone on the server — the local row can go too.
+          await _localSource.deleteTransaction(item.id);
+          removedAny = true;
+          continue;
+        }
+        // The backend rejected the delete (auth, validation, server error);
+        // leave it queued and carry on with the rest.
+      }
+    }
+    return removedAny;
   }
 
   Future<void> _reload(String userId) async {
@@ -409,4 +480,8 @@ class TransactionRepositoryImpl implements TransactionRepository {
   String _newLocalId() {
     return 'local-${DateTime.now().microsecondsSinceEpoch}-${_localIdSeed++}';
   }
+
+  /// True for the temporary ids minted locally for transactions the backend
+  /// never acknowledged (`local-<micros>-<seed>`).
+  bool _isLocalId(String id) => id.startsWith('local-');
 }

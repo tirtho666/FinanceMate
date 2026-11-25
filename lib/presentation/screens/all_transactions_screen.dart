@@ -451,18 +451,25 @@ class _TransactionList extends StatelessWidget {
       ),
     );
 
-    if (shouldDelete == true && context.mounted) {
-      final success = await provider.deleteTransaction(transaction);
-      if (success && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Transaction deleted successfully'),
-            backgroundColor: AppPalette.primary,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    }
+    if (shouldDelete != true || !context.mounted) return;
+
+    // Capture the messenger before awaiting so the result can be reported
+    // safely. Success is only shown once the backend *and* the local cache have
+    // both permanently dropped the row; otherwise the exact error is surfaced in
+    // red and the list has already been rolled back.
+    final messenger = ScaffoldMessenger.of(context);
+    final error = await provider.deleteTransaction(transaction);
+
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(error ?? 'Transaction deleted successfully'),
+          backgroundColor:
+              error == null ? AppPalette.primary : AppPalette.expense,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
   }
 
   @override

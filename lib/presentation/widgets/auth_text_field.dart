@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_palette.dart';
 
+/// Rounded auth input styled after `assets/login_ui.png`: `#F8FAFC` fill,
+/// `#CBD5E1` border and a dark navy prefix icon.
 class AuthTextField extends StatefulWidget {
   const AuthTextField({
     super.key,
@@ -31,11 +33,13 @@ class AuthTextField extends StatefulWidget {
 }
 
 class _AuthTextFieldState extends State<AuthTextField> {
+  static const BorderRadius _radius = BorderRadius.all(Radius.circular(12));
+
   late bool _obscured = widget.obscureText;
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.appColors;
+    final textTheme = Theme.of(context).textTheme;
 
     return TextFormField(
       controller: widget.controller,
@@ -46,9 +50,19 @@ class _AuthTextFieldState extends State<AuthTextField> {
       validator: widget.validator,
       autovalidateMode: AutovalidateMode.onUserInteraction,
       onFieldSubmitted: widget.onFieldSubmitted,
+      style: textTheme.bodyMedium?.copyWith(color: AppPalette.authNavy),
       decoration: InputDecoration(
         hintText: widget.hintText,
-        prefixIcon: Icon(widget.prefixIcon, color: colors.primary),
+        hintStyle: textTheme.bodyMedium?.copyWith(
+          color: AppPalette.authSubtitle,
+        ),
+        filled: true,
+        fillColor: AppPalette.authFieldFill,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 16,
+        ),
+        prefixIcon: Icon(widget.prefixIcon, color: AppPalette.authNavy),
         suffixIcon: widget.obscureText
             ? IconButton(
                 onPressed: () => setState(() => _obscured = !_obscured),
@@ -56,10 +70,26 @@ class _AuthTextFieldState extends State<AuthTextField> {
                   _obscured
                       ? Icons.visibility_outlined
                       : Icons.visibility_off_outlined,
-                  color: colors.primary,
+                  color: AppPalette.authNavy,
                 ),
               )
             : null,
+        border: const OutlineInputBorder(
+          borderRadius: _radius,
+          borderSide: BorderSide(color: AppPalette.authFieldBorder),
+        ),
+        enabledBorder: const OutlineInputBorder(
+          borderRadius: _radius,
+          borderSide: BorderSide(color: AppPalette.authFieldBorder),
+        ),
+        focusedBorder: const OutlineInputBorder(
+          borderRadius: _radius,
+          borderSide: BorderSide(color: AppPalette.authNavy, width: 1.5),
+        ),
+        disabledBorder: const OutlineInputBorder(
+          borderRadius: _radius,
+          borderSide: BorderSide(color: AppPalette.authFieldBorder),
+        ),
       ),
     );
   }
