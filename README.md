@@ -4,6 +4,12 @@ A personal finance and expense tracking mobile app built with Flutter, backed by
 
 - **Backend Repository:** [github.com/tirtho666/FinanceMate-Backend](https://github.com/tirtho666/FinanceMate-Backend)
 - **Live API Base URL:** `[https://financemate-backend.onrender.com](https://financemate-backend.onrender.com)`
+  
+<img width="590" height="1280" alt="WhatsApp Image 2026-11-25 at 1 47 13 PM (2)" src="https://github.com/user-attachments/assets/4bf29247-c947-447e-a9f1-064ab45fae0f" />
+<img width="590" height="1280" alt="WhatsApp Image 2026-11-25 at 1 47 11 PM (1)" src="https://github.com/user-attachments/assets/9a6a8b8f-9a4a-448d-88ae-8d13b5661dfc" />
+<img width="590" height="1280" alt="WhatsApp Image 2026-11-25 at 1 47 11 PM" src="https://github.com/user-attachments/assets/bc0850ed-4a6b-4189-980b-0ef0232c6741" />
+<img width="590" height="1280" alt="WhatsApp Image 2026-11-25 at 1 47 08 PM (1)" src="https://github.com/user-attachments/assets/38300f31-bd1a-44fc-8778-38550696dd28" />
+<img width="590" height="1280" alt="WhatsApp Image 2026-11-25 at 1 47 14 PM" src="https://github.com/user-attachments/assets/518a3b3a-a03d-47de-955a-39a8a23530b6" />
 
 ## Tech Stack
 
