@@ -3,13 +3,19 @@
 A personal finance and expense tracking mobile app built with Flutter, backed by a custom Node.js and PostgreSQL REST API. The app is designed around Clean Architecture and an offline-first workflow so transactions can be recorded, filtered, and managed reliably even without an active internet connection.
 
 - **Backend Repository:** [github.com/tirtho666/FinanceMate-Backend](https://github.com/tirtho666/FinanceMate-Backend)
-- **Live API Base URL:** `[https://financemate-backend.onrender.com](https://financemate-backend.onrender.com)`
-  
-<img width="590" height="1280" alt="WhatsApp Image 2026-11-25 at 1 47 13 PM (2)" src="https://github.com/user-attachments/assets/4bf29247-c947-447e-a9f1-064ab45fae0f" />
-<img width="590" height="1280" alt="WhatsApp Image 2026-11-25 at 1 47 11 PM (1)" src="https://github.com/user-attachments/assets/9a6a8b8f-9a4a-448d-88ae-8d13b5661dfc" />
-<img width="590" height="1280" alt="WhatsApp Image 2026-11-25 at 1 47 11 PM" src="https://github.com/user-attachments/assets/bc0850ed-4a6b-4189-980b-0ef0232c6741" />
-<img width="590" height="1280" alt="WhatsApp Image 2026-11-25 at 1 47 08 PM (1)" src="https://github.com/user-attachments/assets/38300f31-bd1a-44fc-8778-38550696dd28" />
-<img width="590" height="1280" alt="WhatsApp Image 2026-11-25 at 1 47 14 PM" src="https://github.com/user-attachments/assets/518a3b3a-a03d-47de-955a-39a8a23530b6" />
+- **Live API Base URL:** `https://financemate-backend.onrender.com`
+
+## Screenshots
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/4bf29247-c947-447e-a9f1-064ab45fae0f" width="220" alt="Login Screen" />
+  <img src="https://github.com/user-attachments/assets/9a6a8b8f-9a4a-448d-88ae-8d13b5661dfc" width="220" alt="Dashboard Overview" />
+  <img src="https://github.com/user-attachments/assets/bc0850ed-4a6b-4189-980b-0ef0232c6741" width="220" alt="Category Selection" />
+</p>
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/38300f31-bd1a-44fc-8778-38550696dd28" width="220" alt="Transaction History" />
+  <img src="https://github.com/user-attachments/assets/518a3b3a-a03d-47de-955a-39a8a23530b6" width="220" alt="Currency Selection" />
+</p>
 
 ## Tech Stack
 
@@ -42,6 +48,14 @@ The codebase is organized into three separate layers following Clean Architectur
 - **Dual-Layer Security:** Cloud API routes are secured with JWT Bearer tokens, while an optional device-level App Lock verifies a locally stored SHA-256 password hash on launch.
 - **Multi-Currency Support:** Persistent currency formatting saved locally via `shared_preferences`.
 
+## How to Use
+
+- **Add a Transaction:** Tap the **`+` (Add)** button on the bottom navigation bar, choose **Expense** or **Income**, enter the amount, pick a category, and save.
+- **Delete a Transaction:** **Long-press** on any transaction item in the list to open the delete confirmation dialog.
+- **Filter Records:** Open the **All** tab to filter transactions by timeframe (`All`, `This Month`, `Last Month`) or specific categories.
+- **Work Offline:** Record or delete transactions without an internet connection—changes are stored locally in SQLite and sync automatically once you are back online.
+- **Security & Currency:** Open **Profile & Settings** to change your password (which also updates the device App Lock) or switch your preferred display currency.
+
 ## API Endpoints
 
 | Method | Endpoint | Description |
@@ -69,7 +83,7 @@ The codebase is organized into three separate layers following Clean Architectur
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/tirtho666/FinanceMate.git
+   git clone [https://github.com/tirtho666/FinanceMate.git](https://github.com/tirtho666/FinanceMate.git)
    cd FinanceMate
    ```
 
